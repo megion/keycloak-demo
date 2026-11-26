@@ -1,0 +1,77 @@
+import { Injectable, computed, signal } from '@angular/core';
+import Keycloak from 'keycloak-js';
+import { KEYCLOAK_CLIENT_ID, KEYCLOAK_REALM, KEYCLOAK_URL } from '../config';
+
+/**
+ * Keycloak authentication for the SPA (OAuth2 authorization code + PKCE,
+ * public client). Tokens are kept by keycloak-js; refresh tokens are stored
+ * in Keycloak's session via cookie-based SSO.
+ */
+@Injectable({ providedIn: 'root' })
+export class KeycloakAuthService {
+  private readonly keycloak = new Keycloak({
+    url: KEYCLOAK_URL,
+    realm: KEYCLOAK_REALM,
+    clientId: KEYCLOAK_CLIENT_ID
+  });
+
+  /** True when a valid session exists. */
+  readonly authenticated = signal(false);
+  /** Current access token (refreshed via keycloak.update on demand). */
+  readonly accessToken = signal<string | null>(null);
+  /** Decoded claims of the access token (JWT payload). */
+  readonly claims = computed(() => (this.accessToken() ? this.decodeJwt(this.accessToken()!) : null));
+
+  /** Initializes Keycloak at app bootstrap. 'check-token' leaves anonymous users on the login page. */
+  async init(): Promise<boolean> {
+    this.keycloak.onAuthLogout = () => {
+      this.authenticated.set(false);
+      this.accessToken.set(null);
+    };
+    this.keycloak.onAuthRefreshSuccess = () => {
+      this.authenticated.set(true);
+      this.accessToken.set(this.keycloak.token ?? null);
+    };
+    this.keycloak.onAuthRefreshFailed = () => {
+      this.authenticated.set(false);
+      this.accessToken.set(null);
+    };
+    this.authenticated.set(this.keycloak.authenticated);
+    this.accessToken.set(this.keycloak.token ?? null);
+    return this.keycloak.authenticated;
+  }
+
+  /** Redirects the browser to the Keycloak login form. */
+  login(): void {
+    this.keycloak.login({ redirectUri: window.location.origin });
+  }
+
+  /** Ends the Keycloak session and returns to the login page. */
+  logout(): void {
+    this.keycloak.logout({ redirectUri: window.location.origin });
+  }
+
+  /**
+   * Ensures a fresh access token (refreshes when near expiry) and returns it.
+   * Throws when no session exists.
+   */
+  async ensureValidToken(): Promise<string> {
+    if (!this.keycloak.authenticated) {
+      throw new Error('No Keycloak session');
+    }
+    await this.keycloak.update(30);
+    this.authenticated.set(this.keycloak.authenticated);
+    const token = this.keycloak.token;
+    if (!token) {
+      throw new Error('No access token');
+    }
+    this.accessToken.set(token);
+    return token;
+  }
+
+  /** Decodes the payload of a compact JWT (base64url). */
+  private decodeJwt(token: string): Record<string, unknown> {
+    const payload = token.split('.')[1];
+    return JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+  }
+}

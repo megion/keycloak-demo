@@ -1,0 +1,81 @@
+# Full MyApp stack: Keycloak + PostgreSQL (identity), backend REST API, Angular frontend (nginx).
+# Run: docker compose up -d
+services:
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: keycloak
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "keycloak", "-d", "keycloak"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    volumes:
+      - keycloak-db:/var/lib/postgresql/data
+
+  keycloak:
+    image: keycloak/keycloak:26.0
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["start", "--import-realm"]
+    environment:
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME: "localhost"
+      KC_HEALTH_ENABLED: "true"
+      KC_BOOTSTRAP_ADMIN_USERNAME: "admin"
+      KC_BOOTSTRAP_ADMIN_PASSWORD: "admin"
+      KC_DB: "postgres"
+      KC_DB_URL: "jdbc:postgresql://db:5432/keycloak"
+      KC_DB_USERNAME: "keycloak"
+      KC_DB_PASSWORD: "keycloak"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./infra/myapp-realm.json:/opt/keycloak/data/import/myapp-realm.json:ro
+      - ./infra/keycloak-healthcheck.sh:/opt/keycloak/healthcheck.sh:ro
+    healthcheck:
+      test: ["CMD", "bash", "/opt/keycloak/healthcheck.sh"]
+      interval: 10s
+      timeout: 15s
+      retries: 12
+      start_period: 60s
+
+  # One-shot provisioning: realm import cannot express role mappings for the
+  # backend's service account (Keycloak creates that user when the client is
+  # imported), so the admin realm role is assigned here after Keycloak is up.
+  provision:
+    image: keycloak/keycloak:26.0
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c", "/opt/keycloak/bin/kcadm.sh config credentials --server http://keycloak:8080 --realm master --user admin --password admin && /opt/keycloak/bin/kcadm.sh add-roles -r myapp --uusername service-account-myapp-backend --rolename admin && echo 'provisioned: myapp-backend service account has the admin realm role'"]
+
+  backend:
+    build: ./backend
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    environment:
+      PORT: "3000"
+      KEYCLOAK_URL: "http://keycloak:8080"
+      KC_REALM: "myapp"
+      KC_BACKEND_CLIENT_ID: "myapp-backend"
+      KC_BACKEND_CLIENT_SECRET: "myapp-backend-service-account-secret"
+      ALLOWED_ORIGINS: "http://localhost:4200"
+      LOG_LEVEL: "info"
+    ports:
+      - "3000:3000"
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "4200:80"
+
+volumes:
+  keycloak-db:
