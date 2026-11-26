@@ -15,7 +15,7 @@ It is a three-part stack that demonstrates one thing end-to-end: **how an Angula
 - No application database, no orders, no catalog, no Java/JavaEE code. PostgreSQL exists only as Keycloak's own datastore.
 - Two pages: `/login` and `/user-info`. Three REST endpoints: `/api/health`, `/api/user-info`, `/api/users/:id`.
 - Demo quality: it works for a happy path with two hardcoded users. It is **not** production-ready (see §9).
-- There is **no git repository** in this directory (`.gitignore` files exist, the repo was never initialized). Do not assume history exists.
+- Git was initialized during this handover (2026-11-26): branch `main`, one commit (`18a62ea`), tag `backend-working`. There is **no history before that commit** — do not assume any.
 
 Current state of the code (verified):
 
@@ -391,7 +391,7 @@ In rough priority order — 1 to 4 are the blockers that keep the demo from work
 3. **Restore the built-in client scopes** (§5, §8.12) so tokens carry `sub`, `preferred_username` and `email`. Without it `GET /api/user-info` returns 404 and the SPA header is blank.
 4. **Fix the frontend dependency pins** (§8.2) and commit a lockfile — this unblocks `ng build`, `ng test` and the frontend Docker image.
 5. **Add a `prestart` script** (`"prestart": "npm run build"`) so `npm start` can never run a stale `dist/` (§8.1 — the rebuild itself is done).
-6. **Initialize git** (`git init`, commit everything except the gitignored `node_modules`/`dist`/`out-tsc`/`.env`), tag the working backend, and start a changelog.
+6. **Initialize git** — **done** during this handover (`git init -b main`, 48 files committed, tag `backend-working`). A changelog is still missing; `result.md` is the closest thing to one.
 7. **Fix the login UX** (§8.3) — remove the dead password field.
 8. **Fix `toUserProfile`** (§8.13) so `roles`, `attributes`, `createdAt` and `lastLogin` come from the dedicated Admin API endpoints (`realm-role-mappings`, `client-role-mappings`, `groups`, `attributes`) instead of fields the single-user representation doesn't have.
 9. **Add an admin page** using `GET /api/users/:id`, with a frontend type that matches `toUserProfile` (§8.4) after item 8 is fixed.
