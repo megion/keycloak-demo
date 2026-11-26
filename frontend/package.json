@@ -1,6 +1,7 @@
 {
   "name": "myapp-frontend",
   "version": "0.0.1",
+  "packageManager": "pnpm@12.23.0",
   "scripts": {
     "ng": "ng",
     "start": "ng serve",

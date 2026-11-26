@@ -21,11 +21,12 @@ Current state of the code (verified):
 
 | Area | Status |
 |---|---|
-| Backend TypeScript | compiles clean (`tsc -p tsconfig.json` → no errors), 8 Jest tests pass |
+| Package manager | **pnpm 12.23.0** (migrated from npm on 2026-11-26, pinned via `packageManager` in both `package.json` files, run through corepack). Backend install/build/tests green; frontend install green; the backend Docker image builds and serves `/api/health` |
+| Backend TypeScript | compiles clean (`pnpm run build` → no errors), 8 Jest tests pass |
 | Backend `dist/` | rebuilt during this handover (2026-11-26), now matches `src`; it was stale before and broken against Keycloak 26 (see §8.1) |
-| Frontend | **cannot build** — `npm install` fails (ERESOLVE) and `ng build` fails (TypeScript version); see §8.2 |
+| Frontend | **cannot build** — `pnpm install` succeeds, `pnpm run build` fails on the TypeScript version pin; see §8.2 |
 | docker-compose.yml | valid (`docker compose config` exits 0), Keycloak/Postgres/provision/backend services are consistent |
-| Frontend Dockerfile | its `RUN npx ng build` fails for the same TypeScript reason (§8.2 reproduced locally; the image build itself was not run) |
+| Frontend Dockerfile | its `RUN pnpm run build` fails for the same TypeScript reason (§8.2 reproduced locally; the image build itself was not run) |
 | Keycloak container | starts fine (26.0.8, realm imported) but reports **unhealthy forever** — the healthcheck script compares a CRLF line (§8.11), so `provision` never runs |
 | `GET /api/user-info` | **broken out of the box** — the service account lacks Admin API permissions (§5, §8.11) and the token has no `sub` claim (§8.12) |
 | `GET /api/users/:id`, `/api/health`, 401/403/404 paths | **verified working** once the service account is granted `realm-management` → `manage-users` |
@@ -48,16 +49,16 @@ keyclock-demo/
 │   ├── src/        server.ts config.ts routes.ts auth.ts jwt.ts keycloak-admin.ts errors.ts
 │   ├── test/       auth.spec.ts jwt.spec.ts          (Jest)
 │   ├── dist/       compiled output (gitignored; rebuilt 2026-11-26 — see §8.1)
-│   ├── package.json  jest.config.js  tsconfig.json  tsconfig.test.json  Dockerfile  .env.example  .gitignore
-│   └── node_modules/  (installed)
+│   ├── package.json  pnpm-lock.yaml  pnpm-workspace.yaml  jest.config.js  tsconfig.json  tsconfig.test.json  Dockerfile  .env.example  .gitignore
+│   └── node_modules/  (pnpm, isolated layout with @types hoisted; gitignored)
 └── frontend/
     ├── src/main.ts  src/index.html  src/styles.css
     ├── src/app/       app.component.ts app.config.ts app.routes.ts config.ts
     ├── src/app/auth/  keycloak-auth.service.ts auth-guard.ts
     ├── src/app/pages/login/     login.component.ts
     ├── src/app/pages/user-info/ user-info.component.ts user-info.service.ts user-info.service.spec.ts (Vitest)
-    ├── angular.json  proxy.conf.json  nginx.conf  Dockerfile  tsconfig*.json  .gitignore
-    └── node_modules/  (installed 2026-11-26 with --legacy-peer-deps)
+    ├── angular.json  proxy.conf.json  nginx.conf  Dockerfile  tsconfig*.json  .gitignore  pnpm-workspace.yaml  pnpm-lock.yaml
+    └── node_modules/  (pnpm 12.23.0, native builds approved; gitignored)
 ```
 
 Naming conventions that must be preserved:
@@ -65,6 +66,7 @@ Naming conventions that must be preserved:
 - `*.spec.ts` is the test file suffix in both halves of the project.
 - All realm/client identifiers are prefixed `myapp-` (`myapp-frontend`, `myapp-backend`, `myapp-cli`).
 - All Angular components are standalone (no NgModule, no `AppModule`).
+- Package manager is **pnpm 12.23.0**, pinned in the `packageManager` field of each `package.json` (corepack runs it). pnpm 12 reads its layout/build settings from each project's `pnpm-workspace.yaml`, not from `.npmrc`, so keep those files in sync with the toolchain.
 
 ---
 
@@ -198,22 +200,22 @@ Response shape `UserInfo` is duplicated in two places and must stay in sync:
 ---
 
 ## 8. Known blockers, bugs and gotchas
-Items 8.1, 8.2, 8.11, 8.12 and 8.13 were reproduced by running the build, the toolchain and a live Keycloak 26.0.8. Items 8.3–8.10 are findings from reading the code and the realm/config files; 8.6 is documented Keycloak behavior that this realm's JSON does not implement.
+Items 8.1, 8.2, 8.11, 8.12, 8.13 and 8.14 were reproduced by running the build, the toolchain (npm and pnpm) and a live Keycloak 26.0.8. Items 8.3–8.10 are findings from reading the code and the realm/config files; 8.6 is documented Keycloak behavior that this realm's JSON does not implement.
 
 ### 8.1 `backend/dist/` drifts from `src` — it was broken against Keycloak 26
 `dist/keycloak-admin.js` was built at 10:28 while `src/keycloak-admin.ts` was last edited at 14:14. The compiled file still called the removed Keycloak shorthand `/realms/myapp/token`; the source uses `/realms/myapp/protocol/openid-connect/token`.
-**Symptom:** `npm start` (`node dist/server.js`) fails with `502 keycloak_upstream_error`, and `/api/health` is useless.
+**Symptom:** `pnpm start` (`node dist/server.js`) fails with `502 keycloak_upstream_error`, and `/api/health` is useless.
 **I rebuilt `dist/` during this handover, so it currently matches `src` (verified byte-identical to a fresh `tsc` run).** The drift will reappear as soon as anyone edits `src` without rebuilding.
-**Rule:** `npm run build` before every `npm start`. `dist/` is gitignored; treat it as disposable, never as source. If you add a `prestart` script, this class of bug disappears.
+**Rule:** `pnpm run build` before every `pnpm start`. `dist/` is gitignored; treat it as disposable, never as source. If you add a `prestart` script, this class of bug disappears.
 
 ### 8.2 The frontend toolchain is pinned to versions that cannot build
 `frontend/package.json` declares `typescript: ~5.9.2` and `vitest: ^0.1.6`.
-- Angular 22 (`@angular/build` / `@angular/compiler-cli`) peer-requires **TypeScript `>=6.0 <6.1`** — `ng build` fails with: `The Angular Compiler requires TypeScript >=6.0.0 and <6.1.0 but 5.9.3 was found instead.`
-- `@angular/build:unit-test` peer-requires **vitest `^4.0.8 || ^5.0.0`**. `vitest@0.1.6` does not exist in the npm registry (npm resolved it to `0.1.27`).
-- There is no `frontend/package-lock.json` committed, so plain `npm install` aborts with `ERESOLVE`.
+- Angular 22 (`@angular/build` / `@angular/compiler-cli`) peer-requires **TypeScript `>=6.0 <6.1`** — `pnpm run build` fails with: `The Angular Compiler requires TypeScript >=6.0.0 and <6.1.0 but 5.9.3 was found instead.`
+- `@angular/build:unit-test` peer-requires **vitest `^4.0.8 || ^5.0.0`**. `vitest@0.1.6` does not exist in the npm registry (pnpm resolves it to `0.1.27`).
+- The npm lockfile is gone after the pnpm migration (2026-11-26): `frontend/pnpm-lock.yaml` is committed and `pnpm install` completes cleanly — the peer conflicts are warnings, not `ERESOLVE` aborts.
 
-**Fix:** set `"typescript": "~6.0.3"` and `"vitest": "^4.0.8"` in `frontend/package.json`, then install and commit the lockfile. (`npm install --legacy-peer-deps` works around ERESOLVE, but the versions above are the real fix.)
-This also unblocks `frontend/Dockerfile`, whose `RUN npx ng build` currently fails → the `frontend` image in docker-compose cannot be built.
+**Fix:** set `"typescript": "~6.0.3"` and `"vitest": "^4.0.8"` in `frontend/package.json`, then `pnpm install` and commit the refreshed lockfile.
+This also unblocks `frontend/Dockerfile`, whose `RUN pnpm run build` currently fails → the `frontend` image in docker-compose cannot be built.
 
 ### 8.3 The login form collects credentials that are never used
 `login.component.ts:41-46` builds a reactive form with email + password validators, and `submitLogin()` (line 48-56) discards the values and calls `auth.login()`, which sends the browser to Keycloak's own login page. Users type a password into a form that does nothing, then have to type it again on Keycloak's page.
@@ -240,7 +242,7 @@ Lines 59–60 say Keycloak writes `aud: ["myapp-backend"]` "when the user holds 
 - `backend/src/config.ts:22-24` — the `if (!config.backendClientSecret)` guard never fires because the default value is non-empty. It only fires if someone sets `KC_BACKEND_CLIENT_SECRET=` to an empty string.
 - `backend/src/jwt.ts:85-93` — `extractRealmRoles`/`hasRealmRole` are used **only** by `test/jwt.spec.ts`; `auth.ts:31` reads `claims.realmRoles` inline. If you extend role checks, use the helpers and make `auth.ts` consistent.
 - Realm JSON client roles (`myapp-backend` → `admin`, lines 20-26) and group `backend-service-accounts` (lines 104-109) are declared but unused by any code path.
-- `backend/Dockerfile` runs `npm install` (dev deps included) in the build stage, then `npm install --omit=dev` in the runtime stage — intentional, two installs.
+- `backend/Dockerfile` runs `pnpm install --frozen-lockfile` (dev deps included) in the build stage, then `pnpm install --frozen-lockfile --prod` in the runtime stage — intentional, two installs; each stage starts with `corepack enable` so the `packageManager` pin picks pnpm 12.23.0. Verified: the image builds and the container serves `/api/health`.
 
 ### 8.9 Unicode bug in the JWT decoder
 `keycloak-auth.service.ts:73-76` decodes the payload with `atob`, which fails for non-Latin1 bytes (Cyrillic, accented names). Real users in a government deployment will hit this.
@@ -283,6 +285,11 @@ The SPA is hit twice by the same defect: `app.component.ts:12` renders `auth.cla
 **Symptom:** every `/api/users/:id` response shows `"roles":[]`, `"attributes":{}`, `"createdAt":null`, `"lastLogin":null` — even for alice, who holds `user` and `admin`. The `clientRoleMappings` fallback silently yields `[]` and realm roles are never read at all.
 **Fix:** fetch the extras from their dedicated endpoints: `/users/{id}/realm-role-mappings`, `/users/{id}/client-role-mappings`, `/users/{id}/groups`, `/users/{id}/attributes`. (`listGroups()` at `/admin/realms/myapp/groups` works and is what `/api/user-info` uses, so group data is available for the owner — just not for arbitrary users.)
 
+### 8.14 pnpm's isolated layout hides `express-serve-static-core` from the type augmentation (verified, fixed in place)
+`auth.ts:5` declares `declare module 'express-serve-static-core'` to attach `authClaims` to Express's `Request`. npm's flat `node_modules` made that module resolvable from the project root, so it worked. pnpm's default `isolated` linker keeps `@types/express-serve-static-core` inside `node_modules/.pnpm`, so `tsc` silently drops the augmentation and every `req.authClaims` access fails with **TS2339** — `pnpm run build` fails and `auth.spec.ts` fails with 5 of 8 tests.
+**Fix in place:** `backend/pnpm-workspace.yaml` sets `publicHoistPattern: ["*types*"]`, hoisting all `@types/*` packages into the root `node_modules`. Verified: `pnpm run build` compiles clean and all 8 Jest tests pass, with the source code unchanged.
+Do not "fix" this by rewriting the augmentation to target `'express'` — the Router handler types come from `express-serve-static-core`, so that only patches `auth.ts` and leaves `routes.ts` broken.
+
 ---
 
 ## 9. Security notes (read before deploying anything real)
@@ -315,20 +322,20 @@ Everything here is demo-grade and deliberately readable:
 
 **Backend** (in `backend/`):
 ```bash
-npm install          # node_modules already installed
-npm run build        # tsc -p tsconfig.json → dist/  (always run before npm start)
-npm run dev         # tsx watch src/server.ts (no dist needed)
-npm test            # jest (8 tests, ~1s, passes)
-npm start           # node dist/server.js  ← requires a fresh build (§8.1)
+pnpm install         # corepack runs the pinned pnpm 12.23.0; layout settings come from pnpm-workspace.yaml
+pnpm run build       # tsc -p tsconfig.json → dist/  (always run before pnpm start)
+pnpm run dev        # tsx watch src/server.ts (no dist needed)
+pnpm test           # jest (8 tests, ~1s, passes)
+pnpm start          # node dist/server.js  ← requires a fresh build (§8.1)
 ```
 
 **Frontend** (in `frontend/`):
 ```bash
-npm install --legacy-peer-deps   # required until package.json versions are fixed (§8.2)
-npm start                       # ng serve, proxies /api → http://localhost:3000 via proxy.conf.json
-npm run build                   # currently fails (§8.2)
-npm run watch                   # incremental dev build
-npm test                        # ng test → vitest (currently fails, vitest version pinned too low)
+pnpm install         # succeeds; Angular/vitest peer conflicts are warnings, not ERESOLVE (§8.2)
+pnpm start          # ng serve, proxies /api → http://localhost:3000 via proxy.conf.json
+pnpm run build       # currently fails (§8.2)
+pnpm run watch       # incremental dev build
+pnpm test           # ng test → vitest (currently fails, vitest version pinned too low)
 ```
 
 **Full stack** (in the project root):
@@ -389,8 +396,8 @@ In rough priority order — 1 to 4 are the blockers that keep the demo from work
 1. **Fix `infra/keycloak-healthcheck.sh`** (§8.11, one line: strip the `\r`). Without it Keycloak is permanently unhealthy and `provision` never runs.
 2. **Fix the `provision` grant** (§5) to `--cclientid realm-management --rolename manage-users` (or `view-users` for read-only). Verified: this is what makes the Admin API, and therefore `/api/users/:id` and `/api/user-info`, work.
 3. **Restore the built-in client scopes** (§5, §8.12) so tokens carry `sub`, `preferred_username` and `email`. Without it `GET /api/user-info` returns 404 and the SPA header is blank.
-4. **Fix the frontend dependency pins** (§8.2) and commit a lockfile — this unblocks `ng build`, `ng test` and the frontend Docker image.
-5. **Add a `prestart` script** (`"prestart": "npm run build"`) so `npm start` can never run a stale `dist/` (§8.1 — the rebuild itself is done).
+4. **Fix the frontend dependency pins** (§8.2) — `pnpm install` already works and `pnpm-lock.yaml` is committed; changing the pins and reinstalling unblocks `pnpm run build`, `pnpm test` and the frontend Docker image.
+5. **Add a `prestart` script** (`"prestart": "pnpm run build"`) so `pnpm start` can never run a stale `dist/` (§8.1 — the rebuild itself is done).
 6. **Initialize git** — **done** during this handover (`git init -b main`, 48 files committed, tag `backend-working`). A changelog is still missing; `result.md` is the closest thing to one.
 7. **Fix the login UX** (§8.3) — remove the dead password field.
 8. **Fix `toUserProfile`** (§8.13) so `roles`, `attributes`, `createdAt` and `lastLogin` come from the dedicated Admin API endpoints (`realm-role-mappings`, `client-role-mappings`, `groups`, `attributes`) instead of fields the single-user representation doesn't have.
@@ -409,11 +416,12 @@ In rough priority order — 1 to 4 are the blockers that keep the demo from work
 Status legend: **green** = I ran it and it passed; **BLOCKED** = I ran it and it fails today. Most of these were executed during this handover against a live stack; `jq`, `curl` and `psql` are installed on this machine, so the smoke test runs from the host.
 
 ```bash
-cd backend && npm run build && npm test                 # green (8 tests pass)
-cd backend && npx tsc -p tsconfig.json --noEmit         # green
-cd backend && npm run build && npx tsc -p tsconfig.json --outDir /tmp/opencode-check && diff dist/keycloak-admin.js /tmp/opencode-check/keycloak-admin.js   # §8.1 staleness check, must be identical
-cd frontend && npm install --legacy-peer-deps           # green (ERESOLVE needs the flag)
-cd frontend && npx ng build                             # BLOCKED (§8.2)
+cd backend && pnpm install && pnpm run build && pnpm test   # green (8 tests pass)
+cd backend && pnpm exec tsc -p tsconfig.json --noEmit       # green
+cd backend && pnpm run build && pnpm exec tsc -p tsconfig.json --outDir /tmp/opencode-check && diff dist/keycloak-admin.js /tmp/opencode-check/keycloak-admin.js   # §8.1 staleness check, must be identical
+cd frontend && pnpm install                                 # green (peer conflicts are warnings)
+cd frontend && pnpm run build                               # BLOCKED (§8.2)
+cd backend && docker build -t myapp-backend-pnpm .          # green (corepack + pnpm 12.23.0; container serves /api/health against a live Keycloak)
 docker compose config                                   # green
 docker compose up -d db keycloak                        # keycloak starts and imports the realm; container reports unhealthy (§8.11)
 docker compose exec keycloak bash /opt/keycloak/healthcheck.sh   # exit 1 today (§8.11)

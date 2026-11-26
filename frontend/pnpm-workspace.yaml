@@ -1,0 +1,9 @@
+# pnpm settings for the frontend project (pnpm 12 reads config here, not .npmrc).
+# allowBuilds approves the native/compiled dependencies the Angular toolchain needs:
+# @parcel/watcher (ng serve watch mode), esbuild (the Angular compiler backend),
+# lmdb and msgpackr-extract (the Angular persistent build cache).
+allowBuilds:
+  "@parcel/watcher": true
+  esbuild: true
+  lmdb: true
+  msgpackr-extract: true
