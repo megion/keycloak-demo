@@ -1,0 +1,6 @@
+node_modules/
+dist/
+pnpm-lock.yaml
+# Dockerfile and .env.example are deployment/config files, not source code Prettier formats.
+Dockerfile
+.env.example

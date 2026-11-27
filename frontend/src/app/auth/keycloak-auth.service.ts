@@ -12,7 +12,7 @@ export class KeycloakAuthService {
   private readonly keycloak = new Keycloak({
     url: KEYCLOAK_URL,
     realm: KEYCLOAK_REALM,
-    clientId: KEYCLOAK_CLIENT_ID
+    clientId: KEYCLOAK_CLIENT_ID,
   });
 
   /** True when a valid session exists. */
@@ -20,7 +20,9 @@ export class KeycloakAuthService {
   /** Current access token (refreshed via keycloak.update on demand). */
   readonly accessToken = signal<string | null>(null);
   /** Decoded claims of the access token (JWT payload). */
-  readonly claims = computed(() => (this.accessToken() ? this.decodeJwt(this.accessToken()!) : null));
+  readonly claims = computed(() =>
+    this.accessToken() ? this.decodeJwt(this.accessToken()!) : null,
+  );
 
   /** Initializes Keycloak at app bootstrap. 'check-token' leaves anonymous users on the login page. */
   async init(): Promise<boolean> {
@@ -32,7 +34,7 @@ export class KeycloakAuthService {
       this.authenticated.set(true);
       this.accessToken.set(this.keycloak.token ?? null);
     };
-    this.keycloak.onAuthRefreshFailed = () => {
+    this.keycloak.onAuthRefreshError = () => {
       this.authenticated.set(false);
       this.accessToken.set(null);
     };
@@ -59,7 +61,12 @@ export class KeycloakAuthService {
     if (!this.keycloak.authenticated) {
       throw new Error('No Keycloak session');
     }
-    await this.keycloak.update(30);
+    const refreshed = await this.keycloak.updateToken(30);
+    if (refreshed) {
+      console.log('Token is updated success');
+    } else {
+      console.log('The token is still valid; no renewal was required.');
+    }
     this.authenticated.set(this.keycloak.authenticated);
     const token = this.keycloak.token;
     if (!token) {

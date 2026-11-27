@@ -17,14 +17,16 @@ function fakeResponse() {
     },
     setHeader(name: string, value: string) {
       this.headers[name] = value;
-    }
+    },
   };
   return res;
 }
 
 describe('requireRealmRole', () => {
   it('passes when the token carries the required role', async () => {
-    const req = { authClaims: { realmRoles: ['user', 'myapp-backend-audience'] } } as unknown as Request;
+    const req = {
+      authClaims: { realmRoles: ['user', 'myapp-backend-audience'] },
+    } as unknown as Request;
     const res = fakeResponse();
     const next = jest.fn() as NextFunction;
     await requireRealmRole('user')(req, res as unknown as Response, next);
@@ -33,7 +35,9 @@ describe('requireRealmRole', () => {
   });
 
   it('returns 403 when the role is missing', async () => {
-    const req = { authClaims: { realmRoles: ['myapp-backend-audience'] } } as unknown as Request;
+    const req = {
+      authClaims: { realmRoles: ['myapp-backend-audience'] },
+    } as unknown as Request;
     const res = fakeResponse();
     const next = jest.fn() as NextFunction;
     await requireRealmRole('admin')(req, res as unknown as Response, next);

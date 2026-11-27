@@ -14,7 +14,7 @@ export interface UserInfo {
   email: string | null;
   emailVerified: boolean;
   roles: string[];
-  groups: Array<{ id: string; name: string }>;
+  groups: { id: string; name: string }[];
   attributes: Record<string, string[]>;
   createdAt: string | null;
   lastLogin: string | null;
@@ -39,8 +39,8 @@ export class UserInfoService {
     const token = await this.auth.ensureValidToken();
     return firstValueFrom(
       this.http.get<UserInfo>(`${API_BASE_URL}/user-info`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+        headers: { Authorization: `Bearer ${token}` },
+      }),
     );
   }
 
@@ -49,8 +49,8 @@ export class UserInfoService {
     const token = await this.auth.ensureValidToken();
     return firstValueFrom(
       this.http.get<UserInfo>(`${API_BASE_URL}/users/${id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+        headers: { Authorization: `Bearer ${token}` },
+      }),
     );
   }
 }

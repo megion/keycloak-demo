@@ -1,4 +1,9 @@
-import { jwtVerify, createRemoteJWKSet, type JWTPayload, type JWTVerifyGetKey } from 'jose';
+import {
+  jwtVerify,
+  createRemoteJWKSet,
+  type JWTPayload,
+  type JWTVerifyGetKey,
+} from 'jose';
 import { config } from './config';
 import { forbidden, upstreamError } from './errors';
 
@@ -17,9 +22,13 @@ export async function loadOpenIdConfig(): Promise<OpenIdConfig> {
   if (openIdCache) {
     return openIdCache;
   }
-  const response = await fetch(`${config.keycloakUrl}/realms/${config.realm}/.well-known/openid-configuration`);
+  const response = await fetch(
+    `${config.keycloakUrl}/realms/${config.realm}/.well-known/openid-configuration`,
+  );
   if (!response.ok) {
-    throw upstreamError(`OpenID discovery request failed with HTTP ${response.status}`);
+    throw upstreamError(
+      `OpenID discovery request failed with HTTP ${response.status}`,
+    );
   }
   const json = await response.json();
   openIdCache = { issuer: json.issuer, jwksUri: json.jwks_uri };
@@ -34,7 +43,9 @@ export async function warmUpOpenIdConfig(): Promise<void> {
 /** Remote JWKS getters are created once per realm and refreshed on demand by jose. */
 const jwksCache = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
 
-export function getJwks(jwksUri: string): ReturnType<typeof createRemoteJWKSet> {
+export function getJwks(
+  jwksUri: string,
+): ReturnType<typeof createRemoteJWKSet> {
   const cached = jwksCache.get(jwksUri);
   if (cached) {
     return cached;
@@ -53,14 +64,14 @@ export function getJwks(jwksUri: string): ReturnType<typeof createRemoteJWKSet> 
 export async function verifyClaims(
   rawToken: string,
   jwkGetter: JWTVerifyGetKey,
-  options: { issuer: string; audience: string[] }
+  options: { issuer: string; audience: string[] },
 ): Promise<JWTPayload> {
   try {
     // Keycloak writes aud: ["myapp-backend"] when the user holds the
     // myapp-backend-audience realm role; jose requires it to be present.
     const result = await jwtVerify(rawToken, jwkGetter, {
       issuer: options.issuer,
-      audience: options.audience
+      audience: options.audience,
     });
     return result.payload;
   } catch {
@@ -77,7 +88,7 @@ export async function verifyAccessToken(rawToken: string): Promise<JWTPayload> {
   const { issuer, jwksUri } = await loadOpenIdConfig();
   return verifyClaims(rawToken, getJwks(jwksUri), {
     issuer,
-    audience: [config.backendClientId]
+    audience: [config.backendClientId],
   });
 }
 

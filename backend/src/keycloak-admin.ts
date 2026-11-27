@@ -37,7 +37,7 @@ export interface UserInfo {
   email: string | null;
   emailVerified: boolean;
   roles: string[];
-  groups: Array<{ id: string; name: string }>;
+  groups: { id: string; name: string }[];
   attributes: Record<string, string[]>;
   createdAt: string | null;
   lastLogin: string | null;
@@ -53,39 +53,55 @@ let serviceAccountToken: { value: string; expiresAt: number } | null = null;
 
 /** Fetches (and caches) the backend's own service-account access token. */
 export async function getServiceAccountToken(): Promise<string> {
-  if (serviceAccountToken && Date.now() < serviceAccountToken.expiresAt - 10_000) {
+  if (
+    serviceAccountToken &&
+    Date.now() < serviceAccountToken.expiresAt - 10_000
+  ) {
     return serviceAccountToken.value;
   }
   // Keycloak 26 no longer serves the /realms/{realm}/token shorthand, so the
   // full openid-connect token endpoint is used.
-  const response = await fetch(`${config.keycloakUrl}/realms/${config.realm}/protocol/openid-connect/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'client_credentials',
-      client_id: config.backendClientId,
-      client_secret: config.backendClientSecret
-    })
-  });
+  const response = await fetch(
+    `${config.keycloakUrl}/realms/${config.realm}/protocol/openid-connect/token`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'client_credentials',
+        client_id: config.backendClientId,
+        client_secret: config.backendClientSecret,
+      }),
+    },
+  );
   if (!response.ok) {
-    throw upstreamError(`Keycloak rejected the service-account token request: HTTP ${response.status}`);
+    throw upstreamError(
+      `Keycloak rejected the service-account token request: HTTP ${response.status}`,
+    );
   }
   const json = await response.json();
-  serviceAccountToken = { value: json.access_token, expiresAt: Date.now() + json.expires_in * 1000 };
+  serviceAccountToken = {
+    value: json.access_token,
+    expiresAt: Date.now() + json.expires_in * 1000,
+  };
   return serviceAccountToken.value;
 }
 
 /** GET /admin/realms/{realm}/users/{id} – the full profile of a user. */
 export async function fetchUserProfile(userId: string): Promise<KeycloakUser> {
   const token = await getServiceAccountToken();
-  const response = await fetch(`${config.keycloakUrl}/admin/realms/${config.realm}/users/${userId}`, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
+  const response = await fetch(
+    `${config.keycloakUrl}/admin/realms/${config.realm}/users/${userId}`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  );
   if (response.status === 404) {
     throw notFound(`User "${userId}" not found in realm "${config.realm}"`);
   }
   if (!response.ok) {
-    throw upstreamError(`Keycloak Admin API responded with HTTP ${response.status}`);
+    throw upstreamError(
+      `Keycloak Admin API responded with HTTP ${response.status}`,
+    );
   }
   return response.json();
 }
@@ -93,11 +109,16 @@ export async function fetchUserProfile(userId: string): Promise<KeycloakUser> {
 /** GET /admin/realms/{realm}/groups – all groups of the realm. */
 export async function listGroups(): Promise<KeycloakGroup[]> {
   const token = await getServiceAccountToken();
-  const response = await fetch(`${config.keycloakUrl}/admin/realms/${config.realm}/groups`, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
+  const response = await fetch(
+    `${config.keycloakUrl}/admin/realms/${config.realm}/groups`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  );
   if (!response.ok) {
-    throw upstreamError(`Keycloak Admin API responded with HTTP ${response.status}`);
+    throw upstreamError(
+      `Keycloak Admin API responded with HTTP ${response.status}`,
+    );
   }
   return response.json();
 }
@@ -111,17 +132,20 @@ export function isoTimestamp(epochMillis: number | undefined): string | null {
 export function buildUserInfo(
   claims: Record<string, unknown>,
   profile: KeycloakUser,
-  groups: KeycloakGroup[]
+  groups: KeycloakGroup[],
 ): UserInfo {
   return {
     sub: profile.id,
     username: profile.username,
-    fullName: `${profile.firstName ?? ''} ${profile.lastName ?? ''}`.trim() || profile.username,
+    fullName:
+      `${profile.firstName ?? ''} ${profile.lastName ?? ''}`.trim() ||
+      profile.username,
     firstName: profile.firstName ?? null,
     lastName: profile.lastName ?? null,
     email: profile.email ?? null,
     emailVerified: Boolean(profile.emailVerified),
-    roles: (claims.realmRoles as string[] | undefined) ?? profile.realmRoles ?? [],
+    roles:
+      (claims.realmRoles as string[] | undefined) ?? profile.realmRoles ?? [],
     groups: groups.map((group) => ({ id: group.id, name: group.name })),
     attributes: profile.attributes ?? {},
     createdAt: isoTimestamp(profile.createdTimestamp),
@@ -130,7 +154,7 @@ export function buildUserInfo(
     locale: typeof claims.locale === 'string' ? claims.locale : null,
     audience: (claims.aud as string[] | undefined) ?? [],
     keycloakUrl: config.keycloakUrl,
-    accountUrl: `${config.keycloakUrl}/realms/${config.realm}/user/${profile.id}`
+    accountUrl: `${config.keycloakUrl}/realms/${config.realm}/user/${profile.id}`,
   };
 }
 
@@ -139,7 +163,9 @@ export function toUserProfile(profile: KeycloakUser) {
   return {
     id: profile.id,
     username: profile.username,
-    fullName: `${profile.firstName ?? ''} ${profile.lastName ?? ''}`.trim() || profile.username,
+    fullName:
+      `${profile.firstName ?? ''} ${profile.lastName ?? ''}`.trim() ||
+      profile.username,
     firstName: profile.firstName ?? null,
     lastName: profile.lastName ?? null,
     email: profile.email ?? null,
@@ -148,6 +174,6 @@ export function toUserProfile(profile: KeycloakUser) {
     roles: profile.realmRoles ?? [],
     attributes: profile.attributes ?? {},
     createdAt: isoTimestamp(profile.createdTimestamp),
-    lastLogin: isoTimestamp(profile.lastLogin)
+    lastLogin: isoTimestamp(profile.lastLogin),
   };
 }

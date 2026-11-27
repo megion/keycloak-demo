@@ -40,8 +40,6 @@ keyclock-demo/
 ├── docker-compose.yml           # full stack: db, keycloak, provision, backend, frontend
 ├── AGENTS.md                    # this file (handover)
 ├── avante.md                    # legacy AI-plugin prompt, superseded (§12)
-├── av.lua                       # empty placeholder (Neovim Avante config slot)
-├── av2.lua                      # Neovim Avante keymap config; dev-tooling only, not app code
 ├── infra/
 │   ├── myapp-realm.json         # Keycloak realm "myapp" (228 lines) — imported on Keycloak start
 │   └── keycloak-healthcheck.sh  # health probe for the Keycloak container (management port 9000)
@@ -49,15 +47,15 @@ keyclock-demo/
 │   ├── src/        server.ts config.ts routes.ts auth.ts jwt.ts keycloak-admin.ts errors.ts
 │   ├── test/       auth.spec.ts jwt.spec.ts          (Jest)
 │   ├── dist/       compiled output (gitignored; rebuilt 2026-11-26 — see §8.1)
-│   ├── package.json  pnpm-lock.yaml  pnpm-workspace.yaml  jest.config.js  tsconfig.json  tsconfig.test.json  Dockerfile  .env.example  .gitignore
+│   ├── package.json  pnpm-lock.yaml  pnpm-workspace.yaml  jest.config.js  eslint.config.mjs  tsconfig.json  tsconfig.test.json  Dockerfile  .env.example  .gitignore  .prettierrc  .prettierignore
 │   └── node_modules/  (pnpm, isolated layout with @types hoisted; gitignored)
 └── frontend/
     ├── src/main.ts  src/index.html  src/styles.css
-    ├── src/app/       app.component.ts app.config.ts app.routes.ts config.ts
+    ├── src/app/       app.component.ts app.component.html app.config.ts app.routes.ts config.ts
     ├── src/app/auth/  keycloak-auth.service.ts auth-guard.ts
-    ├── src/app/pages/login/     login.component.ts
-    ├── src/app/pages/user-info/ user-info.component.ts user-info.service.ts user-info.service.spec.ts (Vitest)
-    ├── angular.json  proxy.conf.json  nginx.conf  Dockerfile  tsconfig*.json  .gitignore  pnpm-workspace.yaml  pnpm-lock.yaml
+    ├── src/app/pages/login/     login.component.ts login.component.html login.component.spec.ts (Vitest)
+    ├── src/app/pages/user-info/ user-info.component.ts user-info.component.html user-info.service.ts user-info.service.spec.ts (Vitest)
+    ├── angular.json  proxy.conf.json  nginx.conf  Dockerfile  eslint.config.js  tsconfig*.json  .gitignore  .prettierrc  .prettierignore  pnpm-workspace.yaml  pnpm-lock.yaml
     └── node_modules/  (pnpm 12.23.0, native builds approved; gitignored)
 ```
 
@@ -188,9 +186,9 @@ Angular **22**, standalone components, signals, **zoneless change detection** (`
 | `frontend/src/app/auth/keycloak-auth.service.ts` | `Keycloak` instance, signals `authenticated`/`accessToken`, computed `claims`, `init()`, `login()`, `logout()`, `ensureValidToken()` (refreshes when the token expires within 30s), `decodeJwt()` |
 | `frontend/src/app/auth/auth-guard.ts` | `authenticatedGuard` (→ `/login` when anonymous), `anonymousGuard` (→ `/user-info` when logged in) |
 | `frontend/src/app/app.routes.ts` | `login`, `user-info` (lazy `loadComponent`), `''` → `user-info`, `**` → `user-info` |
-| `frontend/src/app/app.component.ts` | header with the logged-in username + sign-out button |
-| `frontend/src/app/pages/login/login.component.ts` | reactive form (email + password ≥8 chars) whose **only** effect is `auth.login()` (see §8.3) |
-| `frontend/src/app/pages/user-info/user-info.component.ts` | loading/error/ready states, profile card, roles/groups badges, identity-provider card |
+| `frontend/src/app/app.component.ts` + `app.component.html` | header with the logged-in username + sign-out button |
+| `frontend/src/app/pages/login/login.component.ts` + `login.component.html` | signal form (email + password ≥8 chars) whose **only** effect is `auth.login()` on a valid submission (see §8.3) |
+| `frontend/src/app/pages/user-info/user-info.component.ts` + `user-info.component.html` | loading/error/ready states, profile card, roles/groups badges, identity-provider card |
 | `frontend/src/app/pages/user-info/user-info.service.ts` | `getUserInfo()`, `getUserById()`; attaches `Authorization: Bearer` |
 | `frontend/src/app/pages/user-info/user-info.service.spec.ts` | Vitest test with a fake Keycloak service and an HTTP interceptor stub |
 
@@ -200,7 +198,7 @@ Response shape `UserInfo` is duplicated in two places and must stay in sync:
 ---
 
 ## 8. Known blockers, bugs and gotchas
-Items 8.1, 8.2, 8.11, 8.12, 8.13 and 8.14 were reproduced by running the build, the toolchain (npm and pnpm) and a live Keycloak 26.0.8. Items 8.3–8.10 are findings from reading the code and the realm/config files; 8.6 is documented Keycloak behavior that this realm's JSON does not implement.
+Items 8.1, 8.2, 8.11, 8.12, 8.13, 8.14 and 8.15 were reproduced by running the build, the toolchain (npm and pnpm), `ng test`, and a live Keycloak 26.0.8; 8.15 was reproduced in a browser against `ng serve`. Items 8.3–8.10 are findings from reading the code and the realm/config files; 8.6 is documented Keycloak behavior that this realm's JSON does not implement.
 
 ### 8.1 `backend/dist/` drifts from `src` — it was broken against Keycloak 26
 `dist/keycloak-admin.js` was built at 10:28 while `src/keycloak-admin.ts` was last edited at 14:14. The compiled file still called the removed Keycloak shorthand `/realms/myapp/token`; the source uses `/realms/myapp/protocol/openid-connect/token`.
@@ -218,7 +216,7 @@ Items 8.1, 8.2, 8.11, 8.12, 8.13 and 8.14 were reproduced by running the build, 
 This also unblocks `frontend/Dockerfile`, whose `RUN pnpm run build` currently fails → the `frontend` image in docker-compose cannot be built.
 
 ### 8.3 The login form collects credentials that are never used
-`login.component.ts:41-46` builds a reactive form with email + password validators, and `submitLogin()` (line 48-56) discards the values and calls `auth.login()`, which sends the browser to Keycloak's own login page. Users type a password into a form that does nothing, then have to type it again on Keycloak's page.
+`login.component.ts` builds a signal form (`form()` with `required`/`email`/`minLength` rules) around the `credentials` model signal, and its submission action discards the values and calls `auth.login()`, which sends the browser to Keycloak's own login page. Users type a password into a form that does nothing, then have to type it again on Keycloak's page.
 **Recommendation:** keep the Keycloak redirect, drop the local inputs (a single "Sign in" button), or forward the typed username to `keycloak.login({ username: ... })` as a pre-filled hint. Do not implement a password grant here — that is `myapp-cli`'s purpose and it is a deliberate anti-pattern.
 
 ### 8.4 `GET /api/users/:id` returns a different shape than its TypeScript type claims
@@ -290,6 +288,13 @@ The SPA is hit twice by the same defect: `app.component.ts:12` renders `auth.cla
 **Fix in place:** `backend/pnpm-workspace.yaml` sets `publicHoistPattern: ["*types*"]`, hoisting all `@types/*` packages into the root `node_modules`. Verified: `pnpm run build` compiles clean and all 8 Jest tests pass, with the source code unchanged.
 Do not "fix" this by rewriting the augmentation to target `'express'` — the Router handler types come from `express-serve-static-core`, so that only patches `auth.ts` and leaves `routes.ts` broken.
 
+### 8.15 `KeycloakAuthService.init()` never initializes the Keycloak client (verified in the browser, kills the login path)
+`keycloak-auth.service.ts:23-27` constructs `new Keycloak({...})` and sets `authenticated = false`, but never calls `this.keycloak.init(...)`. `keycloak-js` only populates `realm`, `authUrl` and the token state inside `init()`, so:
+- `auth.claims()` is permanently `undefined` → the header shows no username (and §8.12 makes it blank for a second reason);
+- pressing "Sign in" with a valid form throws `TypeError: Cannot read properties of undefined (reading 'login')` at `keycloak-js/lib/keycloak.js:1289` — reproduced in a browser against `ng serve`. The SPA never reaches Keycloak's login page, so the demo's whole login path is dead and `/user-info` is unreachable.
+
+**Fix:** in `init()`, before setting `authenticated`, call `await this.keycloak.init({ onload: 'check-token' })` — `check-token` restores an existing session, which is what lets the SPA land on `/user-info` after Keycloak redirects back. `init()` is invoked from `provideAppInitializer` (`app.config.ts:18`), so it must finish before the first navigation.
+
 ---
 
 ## 9. Security notes (read before deploying anything real)
@@ -312,8 +317,10 @@ Everything here is demo-grade and deliberately readable:
 - **Every function and interface has a doc comment** — JSDoc-style, one or two lines, stating *why* the code exists (the comments in `avante.md` asking for JSDoc on complex functions is honored throughout).
 - **Errors are always thrown as `ApiError` factories** (`errors.ts`), never as bare `Error`. The response body shape `{ code, message }` is fixed.
 - **Naming:** middleware `requireX`, verification `verifyX`, fetch `fetchX`, list `listX`, shaping `buildX`/`toX`.
-- **Angular:** standalone components, inline templates, signals (`signal`, `computed`), `inject()` instead of constructor DI, functional guards (`canMatch`), lazy `loadComponent` for the user-info page, zoneless change detection. Templates use the new `@if/@else/@for` syntax. No `NgModule`, no lifecycle hooks.
+- **Angular:** standalone components, templates in sibling `.html` files (`templateUrl`), signals (`signal`, `computed`), `inject()` instead of constructor DI, functional guards (`canMatch`), lazy `loadComponent` for the user-info page, zoneless change detection, signal forms (`@angular/forms/signals`). Templates use the new `@if/@else/@for` syntax. No `NgModule`, no lifecycle hooks, no reactive forms (`ReactiveFormsModule`/`FormBuilder` are not used).
 - **CSS:** plain global stylesheet in `src/styles.css`, semantic class names (`.login-card`, `.profile-card`, `.badge role/group/verified/unverified`). Accessibility: `role="alert"` on error blocks, labelled inputs.
+- **Linting:** ESLint 10 flat config in **both** packages. `frontend/eslint.config.js` is generated by `ng add @angular-eslint/schematics` (angular-eslint 22.8.0, `@angular-eslint/builder` wired into `angular.json` as the `lint` target) and uses `@eslint/js` recommended, `typescript-eslint` recommended + stylistic, `angular.configs.tsRecommended` (component/directive selectors must be prefixed `app`), `angular.configs.templateRecommended` and `templateAccessibility` on component templates. `backend/eslint.config.mjs` uses `@eslint/js` recommended, `typescript-eslint` recommended + stylistic, and ignores `dist/` (compiled output). Both add `eslint-config-prettier` (turns off every rule that conflicts with Prettier) and `eslint-plugin-prettier` with `'prettier/prettier': 'error'`, so formatting is enforced by the linter and `pnpm run lint:fix` reformats the file. Verified: the rule reports formatting errors (`"hello"` → `'hello'`) and `--fix` corrects them; accessibility rules report template issues (`<img>` without `alt`). Gotchas: (1) ESLint 10 rejects **nested `extends`**, so `eslint-plugin-prettier`'s `configs.recommended` preset cannot go in `extends` — register `plugins: { prettier: prettierPlugin }` and set the rule explicitly; (2) in the backend the base `no-unused-vars` does not understand TypeScript parameter properties and flags `ApiError`'s `public readonly status` / `public readonly code`, so it is set to `off` and `@typescript-eslint/no-unused-vars` with `argsIgnorePattern: '^_'` is used (`_next` in `errorHandler` stays legal); (3) `frontend/src/index.html` is plain HTML, not an Angular template — the template parser fails on it, so the `lint` builder's `lintFilePatterns` are `src/**/*.ts` and `src/app/**/*.html`.
+- **Formatting:** Prettier 3.10.1 in **both** packages (`backend/.prettierrc` and `frontend/.prettierrc` are identical: `singleQuote: true`, `tabWidth: 2`, `semi: true`, `printWidth: 80`, `trailingComma: "all"`, `endOfLine: "lf"` — the first three match the style the repo already had; 80 columns wraps the long lines that were previously written on one line). `.prettierignore` excludes `node_modules/`, build output (`dist/`, `.angular/`), `pnpm-lock.yaml`, `nginx.conf`, `Dockerfile` and `.env.example`. Run `pnpm run format` after edits; `pnpm run format:check` is the gate. Gotchas: (1) `.prettierrc` must be plain JSON — Prettier 3.10 parses comments in it as config keys and prints "Ignored unknown option" warnings; (2) Prettier's method-chain breaking is **non-idempotent** in `backend/src/auth.ts` and `backend/src/server.ts` (a single `--write` pass leaves `res\n.status(...)\n.json({...})` chains that `--check` then flags) — run `pnpm run format` a second time, verified to stabilize both files.
 - **Tests:** backend `test/*.spec.ts` runs Jest with `tsconfig.test.json` (loosened `noUnused*`); frontend `src/app/**/*.spec.ts` runs via `ng test` with Vitest. Tests use fakes (fake Express response in `auth.spec.ts`, local RSA key pair in `jwt.spec.ts`, stubbed Keycloak service in `user-info.service.spec.ts`) — no live Keycloak in tests, deliberately.
 
 ---
@@ -326,16 +333,24 @@ pnpm install         # corepack runs the pinned pnpm 12.23.0; layout settings co
 pnpm run build       # tsc -p tsconfig.json → dist/  (always run before pnpm start)
 pnpm run dev        # tsx watch src/server.ts (no dist needed)
 pnpm test           # jest (8 tests, ~1s, passes)
+pnpm run lint       # eslint src test → green (0 problems)
+pnpm run lint:fix   # eslint src test --fix
 pnpm start          # node dist/server.js  ← requires a fresh build (§8.1)
+pnpm run format      # prettier --write: src/**/*.ts, test/**/*.ts, eslint.config.mjs, jest.config.js, package.json, tsconfig.json, tsconfig.test.json
+pnpm run format:check # prettier --check, exits 0 when every file is already formatted
 ```
 
 **Frontend** (in `frontend/`):
 ```bash
-pnpm install         # succeeds; Angular/vitest peer conflicts are warnings, not ERESOLVE (§8.2)
+pnpm install         # green; pins fixed (§8.2) — Angular 22.3.0, TypeScript 6.0.3, vitest 5.1.2, prettier 3.10.1
 pnpm start          # ng serve, proxies /api → http://localhost:3000 via proxy.conf.json
-pnpm run build       # currently fails (§8.2)
+pnpm run build       # green (initial bundle ~331 kB raw / 90 kB transfer; output dist/myapp-frontend)
 pnpm run watch       # incremental dev build
-pnpm test           # ng test → vitest (currently fails, vitest version pinned too low)
+pnpm test           # ng test → vitest: green, 7 tests (login.component.spec.ts + user-info.service.spec.ts)
+pnpm run lint       # ng lint (angular-eslint on src/**/*.ts and src/app/**/*.html, prettier/prettier) → green
+pnpm run lint:fix   # ng lint --fix
+pnpm run format      # prettier --write: src/**/*.{ts,html,css} + angular.json, eslint.config.js, package.json, proxy.conf.json, tsconfig*.json
+pnpm run format:check # prettier --check, exits 0 when every file is already formatted
 ```
 
 **Full stack** (in the project root):
@@ -396,7 +411,7 @@ In rough priority order — 1 to 4 are the blockers that keep the demo from work
 1. **Fix `infra/keycloak-healthcheck.sh`** (§8.11, one line: strip the `\r`). Without it Keycloak is permanently unhealthy and `provision` never runs.
 2. **Fix the `provision` grant** (§5) to `--cclientid realm-management --rolename manage-users` (or `view-users` for read-only). Verified: this is what makes the Admin API, and therefore `/api/users/:id` and `/api/user-info`, work.
 3. **Restore the built-in client scopes** (§5, §8.12) so tokens carry `sub`, `preferred_username` and `email`. Without it `GET /api/user-info` returns 404 and the SPA header is blank.
-4. **Fix the frontend dependency pins** (§8.2) — `pnpm install` already works and `pnpm-lock.yaml` is committed; changing the pins and reinstalling unblocks `pnpm run build`, `pnpm test` and the frontend Docker image.
+4. **Fix the frontend dependency pins** (§8.2) — **done**: `package.json` pins `typescript ^6.0.0` and `vitest ^5.1.2` (installed 6.0.3 and 5.1.2), the lockfile is refreshed, `pnpm run build` and `pnpm test` are green, and `frontend/Dockerfile`'s `RUN pnpm run build` is unblocked (the image build itself has not been run).
 5. **Add a `prestart` script** (`"prestart": "pnpm run build"`) so `pnpm start` can never run a stale `dist/` (§8.1 — the rebuild itself is done).
 6. **Initialize git** — **done** during this handover (`git init -b main`, 48 files committed, tag `backend-working`). A changelog is still missing; `result.md` is the closest thing to one.
 7. **Fix the login UX** (§8.3) — remove the dead password field.
@@ -408,6 +423,7 @@ In rough priority order — 1 to 4 are the blockers that keep the demo from work
 13. **Production hardening** (§9) — TLS, secrets out of the realm JSON, scoped admin privileges, remove `myapp-cli`.
 14. **Replace `atob` JWT decoding** (§8.9).
 15. **Real application data**: if MyApp is to become the e-commerce platform described in `avante.md`, this stack provides identity only. A Postgres schema, an ORM, and a second database service in docker-compose are entirely missing.
+16. **Initialize the Keycloak client** (§8.15, one line in `KeycloakAuthService.init()`) — without it `/login`'s "Sign in" throws a TypeError inside `keycloak-js` and the SPA never reaches Keycloak's login page.
 
 ---
 
@@ -418,9 +434,14 @@ Status legend: **green** = I ran it and it passed; **BLOCKED** = I ran it and it
 ```bash
 cd backend && pnpm install && pnpm run build && pnpm test   # green (8 tests pass)
 cd backend && pnpm exec tsc -p tsconfig.json --noEmit       # green
+cd backend && pnpm run lint                                 # green (0 problems)
+cd backend && pnpm run format && pnpm run format:check      # green only after running format twice (§10 gotcha 2)
 cd backend && pnpm run build && pnpm exec tsc -p tsconfig.json --outDir /tmp/opencode-check && diff dist/keycloak-admin.js /tmp/opencode-check/keycloak-admin.js   # §8.1 staleness check, must be identical
-cd frontend && pnpm install                                 # green (peer conflicts are warnings)
-cd frontend && pnpm run build                               # BLOCKED (§8.2)
+cd frontend && pnpm install                                 # green (pins fixed, §8.2)
+cd frontend && pnpm run build                               # green
+cd frontend && pnpm test                                    # green (7 tests: 6 login + 1 user-info)
+cd frontend && pnpm run lint                                # green ("All files pass linting")
+cd frontend && pnpm run format:check                        # green (exit 0, all files formatted)
 cd backend && docker build -t myapp-backend-pnpm .          # green (corepack + pnpm 12.23.0; container serves /api/health against a live Keycloak)
 docker compose config                                   # green
 docker compose up -d db keycloak                        # keycloak starts and imports the realm; container reports unhealthy (§8.11)

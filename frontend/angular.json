@@ -25,8 +25,16 @@
           "configurations": {
             "production": {
               "budgets": [
-                { "type": "initial", "maximumWarning": "500kB", "maximumError": "1MB" },
-                { "type": "anyComponentStyle", "maximumWarning": "2kB", "maximumError": "4kB" }
+                {
+                  "type": "initial",
+                  "maximumWarning": "500kB",
+                  "maximumError": "1MB"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "2kB",
+                  "maximumError": "4kB"
+                }
               ],
               "outputHashing": "all"
             },
@@ -44,8 +52,12 @@
             "proxyConfig": "proxy.conf.json"
           },
           "configurations": {
-            "production": { "buildTarget": "myapp-frontend:build:production" },
-            "development": { "buildTarget": "myapp-frontend:build:development" }
+            "production": {
+              "buildTarget": "myapp-frontend:build:production"
+            },
+            "development": {
+              "buildTarget": "myapp-frontend:build:development"
+            }
           },
           "defaultConfiguration": "development"
         },
@@ -53,10 +65,19 @@
           "builder": "@angular/build:unit-test",
           "options": {
             "tsConfig": "tsconfig.spec.json",
-            "build": false
+            "runner": "vitest"
+          }
+        },
+        "lint": {
+          "builder": "@angular-eslint/builder:lint",
+          "options": {
+            "lintFilePatterns": ["src/**/*.ts", "src/app/**/*.html"]
           }
         }
       }
     }
+  },
+  "cli": {
+    "schematicCollections": ["angular-eslint"]
   }
 }

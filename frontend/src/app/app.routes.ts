@@ -14,8 +14,11 @@ export const routes: Routes = [
   {
     path: 'user-info',
     canMatch: [authenticatedGuard],
-    loadComponent: () => import('./pages/user-info/user-info.component').then((m) => m.UserInfoComponent)
+    loadComponent: () =>
+      import('./pages/user-info/user-info.component').then(
+        (m) => m.UserInfoComponent,
+      ),
   },
   { path: '', pathMatch: 'full', redirectTo: 'user-info' },
-  { path: '**', redirectTo: 'user-info' }
+  { path: '**', redirectTo: 'user-info' },
 ];

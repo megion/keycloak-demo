@@ -1,5 +1,9 @@
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient, withFetch, withInterceptors } from '@angular/common/http';
+import {
+  provideHttpClient,
+  withFetch,
+  withInterceptors,
+} from '@angular/common/http';
 import { HttpResponse } from '@angular/common/http';
 import { of } from 'rxjs';
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -23,7 +27,7 @@ const DEMO_USER_INFO: UserInfo = {
   locale: null,
   audience: ['myapp-backend'],
   keycloakUrl: 'http://localhost:8080',
-  accountUrl: 'http://localhost:8080/realms/myapp/user/alice'
+  accountUrl: 'http://localhost:8080/realms/myapp/user/alice',
 };
 
 /** Stub Keycloak service: always authenticated, hands out a fake token. */
@@ -37,14 +41,24 @@ describe('UserInfoService', () => {
     TestBed.configureTestingModule({
       providers: [
         UserInfoService,
-        provideHttpClient(withFetch(), withInterceptors([(req, next) => {
-          if (req.url === '/api/user-info') {
-            return of(new HttpResponse({ status: 200, body: DEMO_USER_INFO }));
-          }
-          return next(req);
-        }])),
-        { provide: KeycloakAuthService, useValue: new FakeKeycloakAuthService() }
-      ]
+        provideHttpClient(
+          withFetch(),
+          withInterceptors([
+            (req, next) => {
+              if (req.url === '/api/user-info') {
+                return of(
+                  new HttpResponse({ status: 200, body: DEMO_USER_INFO }),
+                );
+              }
+              return next(req);
+            },
+          ]),
+        ),
+        {
+          provide: KeycloakAuthService,
+          useValue: new FakeKeycloakAuthService(),
+        },
+      ],
     });
   });
 

@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.angular/
+pnpm-lock.yaml
+# nginx.conf and Dockerfile are deployment files, not source code Prettier formats.
+nginx.conf
+Dockerfile
