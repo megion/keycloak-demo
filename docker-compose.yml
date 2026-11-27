@@ -24,7 +24,8 @@ services:
     command: ["start", "--import-realm"]
     environment:
       KC_HTTP_ENABLED: "true"
-      KC_HOSTNAME: "localhost"
+      KC_HOSTNAME: "http://localhost:8080"
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
       KC_HEALTH_ENABLED: "true"
       KC_BOOTSTRAP_ADMIN_USERNAME: "admin"
       KC_BOOTSTRAP_ADMIN_PASSWORD: "admin"
@@ -44,21 +45,21 @@ services:
       retries: 12
       start_period: 60s
 
-  # One-shot provisioning: realm import cannot express role mappings for the
-  # backend's service account (Keycloak creates that user when the client is
-  # imported), so the admin realm role is assigned here after Keycloak is up.
+  # Apply the required token claims and read permissions to new and existing realms.
   provision:
     image: keycloak/keycloak:26.0
     depends_on:
       keycloak:
         condition: service_healthy
-    entrypoint: ["/bin/sh", "-c", "/opt/keycloak/bin/kcadm.sh config credentials --server http://keycloak:8080 --realm master --user admin --password admin && /opt/keycloak/bin/kcadm.sh add-roles -r myapp --uusername service-account-myapp-backend --rolename admin && echo 'provisioned: myapp-backend service account has the admin realm role'"]
+    entrypoint: ["/bin/bash", "/opt/keycloak/provision.sh"]
+    volumes:
+      - ./infra/provision-keycloak.sh:/opt/keycloak/provision.sh:ro
 
   backend:
     build: ./backend
     depends_on:
-      keycloak:
-        condition: service_healthy
+      provision:
+        condition: service_completed_successfully
     environment:
       PORT: "3000"
       KEYCLOAK_URL: "http://keycloak:8080"

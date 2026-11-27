@@ -24,7 +24,7 @@ export class KeycloakAuthService {
     this.accessToken() ? this.decodeJwt(this.accessToken()!) : null,
   );
 
-  /** Initializes Keycloak at app bootstrap. 'check-token' leaves anonymous users on the login page. */
+  /** Restores an existing Keycloak session before Angular evaluates the route guards. */
   async init(): Promise<boolean> {
     this.keycloak.onAuthLogout = () => {
       this.authenticated.set(false);
@@ -38,19 +38,24 @@ export class KeycloakAuthService {
       this.authenticated.set(false);
       this.accessToken.set(null);
     };
-    this.authenticated.set(this.keycloak.authenticated);
+    const authenticated = await this.keycloak.init({
+      onLoad: 'check-sso',
+      redirectUri: `${window.location.origin}/`,
+      checkLoginIframe: false,
+    });
+    this.authenticated.set(authenticated);
     this.accessToken.set(this.keycloak.token ?? null);
-    return this.keycloak.authenticated;
+    return authenticated;
   }
 
   /** Redirects the browser to the Keycloak login form. */
   login(): void {
-    this.keycloak.login({ redirectUri: window.location.origin });
+    this.keycloak.login();
   }
 
   /** Ends the Keycloak session and returns to the login page. */
   logout(): void {
-    this.keycloak.logout({ redirectUri: window.location.origin });
+    this.keycloak.logout();
   }
 
   /**

@@ -67,8 +67,7 @@ export async function verifyClaims(
   options: { issuer: string; audience: string[] },
 ): Promise<JWTPayload> {
   try {
-    // Keycloak writes aud: ["myapp-backend"] when the user holds the
-    // myapp-backend-audience realm role; jose requires it to be present.
+    // The myapp-backend-audience client scope adds the API audience to tokens.
     const result = await jwtVerify(rawToken, jwkGetter, {
       issuer: options.issuer,
       audience: options.audience,
