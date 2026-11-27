@@ -1,16 +1,18 @@
-// @ts-check
-const eslint = require('@eslint/js');
-const { defineConfig } = require('eslint/config');
-const tseslint = require('typescript-eslint');
-const angular = require('angular-eslint');
+import eslint from '@eslint/js';
+import { defineConfig } from 'eslint/config';
+import tseslint from 'typescript-eslint';
+import angular from 'angular-eslint';
 // Turns off every ESLint rule that conflicts with Prettier's formatting.
-const eslintConfigPrettier = require('eslint-config-prettier');
+import eslintConfigPrettier from 'eslint-config-prettier';
 // Prettier as an ESLint rule: `prettier/prettier` reports formatting as a lint error,
 // and `ng lint --fix` reformats the file using frontend/.prettierrc. ESLint 10 rejects
 // nested `extends`, so the plugin is registered explicitly instead of its config preset.
-const prettierPlugin = require('eslint-plugin-prettier');
+import prettierPlugin from 'eslint-plugin-prettier';
 
-module.exports = defineConfig([
+export default defineConfig([
+  // The config file itself is lint tooling, not application source
+  // (backend/eslint.config.mjs ignores its own config the same way).
+  { ignores: ['eslint.config.ts'] },
   {
     files: ['**/*.ts'],
     extends: [

@@ -43,7 +43,7 @@ export class LoginComponent {
     (credentials) => {
       required(credentials.email, { message: 'Email is required' });
       email(credentials.email);
-       required(credentials.password);
+      required(credentials.password);
       minLength(credentials.password, 8, {
         message: 'Password must be at least 8 characters',
       });
