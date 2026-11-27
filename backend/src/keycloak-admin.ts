@@ -1,3 +1,4 @@
+import type { JWTPayload } from 'jose';
 import { config } from './config';
 import { notFound, upstreamError } from './errors';
 
@@ -130,10 +131,11 @@ export function isoTimestamp(epochMillis: number | undefined): string | null {
 
 /** Builds the response of GET /api/user-info from JWT claims + Keycloak profile. */
 export function buildUserInfo(
-  claims: Record<string, unknown>,
+  claims: JWTPayload,
   profile: KeycloakUser,
   groups: KeycloakGroup[],
 ): UserInfo {
+  const { aud } = claims;
   return {
     sub: profile.id,
     username: profile.username,
@@ -152,7 +154,7 @@ export function buildUserInfo(
     lastLogin: isoTimestamp(profile.lastLogin),
     authTime: typeof claims.auth_time === 'number' ? claims.auth_time : null,
     locale: typeof claims.locale === 'string' ? claims.locale : null,
-    audience: (claims.aud as string[] | undefined) ?? [],
+    audience: typeof aud === 'string' ? [aud] : (aud ?? []),
     keycloakUrl: config.keycloakUrl,
     accountUrl: `${config.keycloakUrl}/realms/${config.realm}/user/${profile.id}`,
   };

@@ -76,30 +76,7 @@ body {
   margin: 0 0 1.5rem;
 }
 
-.login-card form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.login-card label {
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-
-.login-card input {
-  padding: 0.6rem;
-  border: 1px solid #cbd1d8;
-  border-radius: 6px;
-  font-size: 1rem;
-}
-
-.login-card input:focus {
-  outline: 2px solid #4f78c7;
-}
-
 .login-card button {
-  margin-top: 1rem;
   padding: 0.7rem 1.2rem;
   border: none;
   border-radius: 6px;
@@ -111,17 +88,6 @@ body {
 
 .login-card button:hover {
   background: #3d61a4;
-}
-
-.form-error {
-  color: #b3261e;
-  font-size: 0.9rem;
-}
-
-.hint {
-  margin-top: 1.5rem;
-  font-size: 0.85rem;
-  color: #666;
 }
 
 /* User info page */
